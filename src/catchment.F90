@@ -1719,84 +1719,86 @@
 !**** - - - - - - - - - - - - - - - - - - - - - - - - - 
 
       DO 100 N=1,NCH
-         IF (POROS(N) .LE. 0.9) THEN
-            !****   Compute equivalent of root zone excess in non-saturated area:
-            rztot=rzeq(n)+rzexc(n)
-            if(ar1(n).ne.1.) then
-               ! rzave=(rztot-ar1(n)*vgwmax(n))/(1.-ar1(n))
-               ! rzave=rzave*poros(n)/vgwmax(n)
-               rzave=rztot*poros(n)/vgwmax(n)
-            else
-               rzave=poros(n)
-            endif
   
-            ! updated warning statement, reichle+koster, 12 Aug 2014
-            !
-            ! Impose minimum of 1.e-4, rather than leaving positive values <1.e-4 unchanged.
-            ! -reichle, 15 Jan 2016
-            
-            if (LAND_FIX) then
-               rzavemin = 1.e-4
-            else
-               rzavemin = 0.
-            end if
-            ! #ifdef LAND_UPD
-            !         if (rzave .le. 1.e-4) then
-            ! #else
-            !         if (rzave .le. 0.) then
-            ! #endif
-            if (rzave .le. rzavemin) then  ! JP: could put rzavemin in catch_constants
-               rzave=1.e-4
-               print*,'problem: rzave <= 1.e-4 in catchment',n
-            end if
-
-            btaux=btau(n)
-            if (srfexc(n) .lt. 0.) btaux=btau(n)*(poros(n)/rzave)
-            rz0=amax1(0.001,rzave-srfexc(n)/(1000.*(-btaux)))
-            tsc0=atau(n)/(rz0**3.)
-            
-            tsc0=tsc0*3600.
-            if(tsc0.lt.dtstep) tsc0=dtstep
-            
-            ! ---------------------------------------------------------------------
-            
-            SRFLW=SRFEXC(N)*DTSTEP/TSC0
-            ! #ifdef LAND_UPD
-            !         IF(SRFLW < 0.    ) SRFLW = 0.04 * SRFLW ! C05 change
-            ! #endif
-            IF(SRFLW < 0.    ) SRFLW = FLWALPHA * SRFLW ! C05 change
-            
-            !rr   following inserted by koster Sep 22, 2003
-            rzdif=rzave/poros(n)-wpwet(n)
-            !**** No moisture transport up if rz at wilting; employ ramping.
-            if(rzdif.le.0. .and. srflw.lt.0.)  srflw=0.
-            if(rzdif.gt.0. .and. rzdif.lt.0.01                                     &
-                 .and. srflw.lt.0.) srflw=srflw*(rzdif/0.01)
-            RZEXC(N)=RZEXC(N)+SRFLW
-            SRFEXC(N)=SRFEXC(N)-SRFLW
-            
-            !**** Topography-dependent tsc2, between rzex and catdef
-            
-            rzx=rzexc(n)/vgwmax(n)
-            
-            if(rzx .gt. .01) then
-               ax=tsa1(n)
-               bx=tsb1(n)
-            elseif(rzx .lt. -.01) then
-               ax=tsa2(n)
-               bx=tsb2(n)
-            else
-               ax=tsa2(n)+(rzx+.01)*(tsa1(n)-tsa2(n))/.02
-               bx=tsb2(n)+(rzx+.01)*(tsb1(n)-tsb2(n))/.02
-            endif
-            
-            tsc2=exp(ax+bx*catdef(n))
-            rzflw=rzexc(n)*tsc2*dtstep/3600.
-            
-            IF (CATDEF(N)-RZFLW .GT. CDCR2(N)) then
-               RZFLW=CATDEF(N)-CDCR2(N)
-            end if
-            
+         !****   Compute equivalent of root zone excess in non-saturated area:
+         rztot=rzeq(n)+rzexc(n)
+         if(ar1(n).ne.1.) then
+            ! rzave=(rztot-ar1(n)*vgwmax(n))/(1.-ar1(n))
+            ! rzave=rzave*poros(n)/vgwmax(n)
+            rzave=rztot*poros(n)/vgwmax(n)
+         else
+            rzave=poros(n)
+         endif
+         
+         ! updated warning statement, reichle+koster, 12 Aug 2014
+         !
+         ! Impose minimum of 1.e-4, rather than leaving positive values <1.e-4 unchanged.
+         ! -reichle, 15 Jan 2016
+         
+         if (LAND_FIX) then
+            rzavemin = 1.e-4
+         else
+            rzavemin = 0.
+         end if
+         ! #ifdef LAND_UPD
+         !         if (rzave .le. 1.e-4) then
+         ! #else
+         !         if (rzave .le. 0.) then
+         ! #endif
+         if (rzave .le. rzavemin) then  ! JP: could put rzavemin in catch_constants
+            rzave=1.e-4
+            print*,'problem: rzave <= 1.e-4 in catchment',n
+         end if
+         
+         btaux=btau(n)
+         if (srfexc(n) .lt. 0.) btaux=btau(n)*(poros(n)/rzave)
+         rz0=amax1(0.001,rzave-srfexc(n)/(1000.*(-btaux)))
+         tsc0=atau(n)/(rz0**3.)
+         
+         tsc0=tsc0*3600.
+         if(tsc0.lt.dtstep) tsc0=dtstep
+         
+         ! ---------------------------------------------------------------------
+         
+         SRFLW=SRFEXC(N)*DTSTEP/TSC0
+         ! #ifdef LAND_UPD
+         !         IF(SRFLW < 0.    ) SRFLW = 0.04 * SRFLW ! C05 change
+         ! #endif
+         IF(SRFLW < 0.    ) SRFLW = FLWALPHA * SRFLW ! C05 change
+         
+         !rr   following inserted by koster Sep 22, 2003
+         rzdif=rzave/poros(n)-wpwet(n)
+         !**** No moisture transport up if rz at wilting; employ ramping.
+         if(rzdif.le.0. .and. srflw.lt.0.)  srflw=0.
+         if(rzdif.gt.0. .and. rzdif.lt.0.01                                     &
+              .and. srflw.lt.0.) srflw=srflw*(rzdif/0.01)
+         RZEXC(N)=RZEXC(N)+SRFLW
+         SRFEXC(N)=SRFEXC(N)-SRFLW
+         
+         !**** Topography-dependent tsc2, between rzex and catdef
+         
+         rzx=rzexc(n)/vgwmax(n)
+         
+         if(rzx .gt. .01) then
+            ax=tsa1(n)
+            bx=tsb1(n)
+         elseif(rzx .lt. -.01) then
+            ax=tsa2(n)
+            bx=tsb2(n)
+         else
+            ax=tsa2(n)+(rzx+.01)*(tsa1(n)-tsa2(n))/.02
+            bx=tsb2(n)+(rzx+.01)*(tsb1(n)-tsb2(n))/.02
+         endif
+         
+         tsc2=exp(ax+bx*catdef(n))
+         rzflw=rzexc(n)*tsc2*dtstep/3600.
+         
+         IF (CATDEF(N)-RZFLW .GT. CDCR2(N)) then
+            RZFLW=CATDEF(N)-CDCR2(N)
+         end if
+         
+         IF (POROS(N) .LE. 0.9) THEN
+            ! mineral soil
             CATDEF(N)=CATDEF(N)-RZFLW
             RZEXC(N)=RZEXC(N)-RZFLW
 

@@ -1693,142 +1693,143 @@ CONTAINS
 !**** - - - - - - - - - - - - - - - - - - - - - - - - - 
 
       DO 100 N=1,NCH
-        IF (POROS(N) .LE. 0.9) THEN
-           !****   Compute equivalent of root zone excess in non-saturated area:
-           rztot=rzeq(n)+rzexc(n)
-           if(ar1(n).ne.1.) then
-              ! rzave=(rztot-ar1(n)*vgwmax(n))/(1.-ar1(n))
-              ! rzave=rzave*poros(n)/vgwmax(n)
-              rzave=rztot*poros(n)/vgwmax(n)
-           else
-              rzave=poros(n)
-           endif
+
+         !****   Compute equivalent of root zone excess in non-saturated area:
+         rztot=rzeq(n)+rzexc(n)
+         if(ar1(n).ne.1.) then
+            ! rzave=(rztot-ar1(n)*vgwmax(n))/(1.-ar1(n))
+            ! rzave=rzave*poros(n)/vgwmax(n)
+            rzave=rztot*poros(n)/vgwmax(n)
+         else
+            rzave=poros(n)
+         endif
+         
+         ! updated warning statement, reichle+koster, 12 Aug 2014
+         !
+         ! Impose minimum of 1.e-4, rather than leaving positive values <1.e-4 unchanged.
+         ! -reichle, 15 Jan 2016
+         if (rzave .le. 1.e-4) then
+            rzave=1.e-4
+            print*,'problem: rzave <= 1.e-4 in catchment',n
+         end if
            
-           ! updated warning statement, reichle+koster, 12 Aug 2014
-           !
-           ! Impose minimum of 1.e-4, rather than leaving positive values <1.e-4 unchanged.
-           ! -reichle, 15 Jan 2016
-           if (rzave .le. 1.e-4) then
-              rzave=1.e-4
-              print*,'problem: rzave <= 1.e-4 in catchment',n
-           end if
-           
-           btaux=btau(n)
-           if (srfexc(n) .lt. 0.) btaux=btau(n)*(poros(n)/rzave)
-           rz0=amax1(0.001,rzave-srfexc(n)/(1000.*(-btaux)))
-           tsc0=atau(n)/(rz0**3.)
-           
-           tsc0=tsc0*3600.
-           if(tsc0.lt.dtstep) tsc0=dtstep
+         btaux=btau(n)
+         if (srfexc(n) .lt. 0.) btaux=btau(n)*(poros(n)/rzave)
+         rz0=amax1(0.001,rzave-srfexc(n)/(1000.*(-btaux)))
+         tsc0=atau(n)/(rz0**3.)
+         
+         tsc0=tsc0*3600.
+         if(tsc0.lt.dtstep) tsc0=dtstep
+         
+         ! ---------------------------------------------------------------------
+         
+         SRFLW=SRFEXC(N)*DTSTEP/TSC0
+         IF(SRFLW < 0.    ) SRFLW = 0.005 * SRFLW ! C05 change
+         !rr   following inserted by koster Sep 22, 2003
+         rzdif=rzave/poros(n)-wpwet(n)
+         !**** No moisture transport up if rz at wilting; employ ramping.
+         if(rzdif.le.0. .and. srflw.lt.0.)  srflw=0.
+         if(rzdif.gt.0. .and. rzdif.lt.0.01                                     &
+              .and. srflw.lt.0.) srflw=srflw*(rzdif/0.01)
+         RZEXC(N)=RZEXC(N)+SRFLW
+         SRFEXC(N)=SRFEXC(N)-SRFLW
 
-           ! ---------------------------------------------------------------------
+         !**** Topography-dependent tsc2, between rzex and catdef
+         
+         rzx=rzexc(n)/vgwmax(n)
+         
+         if(rzx .gt. .01) then
+            ax=tsa1(n)
+            bx=tsb1(n)
+         elseif(rzx .lt. -.01) then
+            ax=tsa2(n)
+            bx=tsb2(n)
+         else
+            ax=tsa2(n)+(rzx+.01)*(tsa1(n)-tsa2(n))/.02
+            bx=tsb2(n)+(rzx+.01)*(tsb1(n)-tsb2(n))/.02
+         endif
+         
+         tsc2=exp(ax+bx*catdef(n))
+         rzflw=rzexc(n)*tsc2*dtstep/3600.
+         
+         IF (CATDEF(N)-RZFLW .GT. CDCR2(N)) then
+            RZFLW=CATDEF(N)-CDCR2(N)
+         end if
+         
+         IF (POROS(N) .LE. 0.9) THEN  
+            CATDEF(N)=CATDEF(N)-RZFLW
+            RZEXC(N)=RZEXC(N)-RZFLW
 
-           SRFLW=SRFEXC(N)*DTSTEP/TSC0
-           IF(SRFLW < 0.    ) SRFLW = 0.005 * SRFLW ! C05 change
-           !rr   following inserted by koster Sep 22, 2003
-           rzdif=rzave/poros(n)-wpwet(n)
-           !**** No moisture transport up if rz at wilting; employ ramping.
-           if(rzdif.le.0. .and. srflw.lt.0.)  srflw=0.
-           if(rzdif.gt.0. .and. rzdif.lt.0.01                                     &
-                .and. srflw.lt.0.) srflw=srflw*(rzdif/0.01)
-           RZEXC(N)=RZEXC(N)+SRFLW
-           SRFEXC(N)=SRFEXC(N)-SRFLW
+         ELSE
 
-           !**** Topography-dependent tsc2, between rzex and catdef
-
-           rzx=rzexc(n)/vgwmax(n)
-           
-           if(rzx .gt. .01) then
-              ax=tsa1(n)
-              bx=tsb1(n)
-           elseif(rzx .lt. -.01) then
-              ax=tsa2(n)
-              bx=tsb2(n)
-           else
-              ax=tsa2(n)+(rzx+.01)*(tsa1(n)-tsa2(n))/.02
-              bx=tsb2(n)+(rzx+.01)*(tsb1(n)-tsb2(n))/.02
-           endif
-           
-           tsc2=exp(ax+bx*catdef(n))
-           rzflw=rzexc(n)*tsc2*dtstep/3600.
-           
-           IF (CATDEF(N)-RZFLW .GT. CDCR2(N)) then
-              RZFLW=CATDEF(N)-CDCR2(N)
-           end if
-           
-           CATDEF(N)=CATDEF(N)-RZFLW
-           RZEXC(N)=RZEXC(N)-RZFLW
-
-        ELSE
-
-          ! PEAT
-          ! MB: accounting for water ponding on AR1
-          ! RZFLOW is partitioned into two flux components: (1) going in/out ponding water volume and (1) going in/out unsaturated soil storage
-          ! Specific yield of ponding water surface fraction is 1.0
-          ! calculate SYSOIL (see Dettmann and Bechtold, VZJ, 2016, for detailed theory)
-          ! SYSOIL in CLSM can be derived from first derivative of 
-          ! f_catdef(zbar) = ((zbar + bf2)^2 +1.0E-20)*bf1
-          ! division by 1000 to convert from m to mm gives (Note: catdef in PEATCLSM remains
-          ! the soil profile deficit, i.e. does not include the ponding water storage).
-          ! SYSOIL = (2*bf1*zbar + 2*bf1*bf2)/1000
-          ! Note: zbar defined here positive below ground.
-          ! For the SYSOIL estimation zbar must be constrained to 0.0 to 0.45 m,
-          ! to avoid extrapolation errors due to the non-optimal
-          ! (linear) approximation with the bf1-bf2-CLSM function,
-          ! theoretical SYSOIL curve levels off approximately at 0 m and 0.45 m.
-          ZBAR1=SQRT(1.e-20+CATDEF(N)/BF1(N))-BF2(N)
-          SYSOIL = (2*bf1(n)*amin1(amax1(zbar1,0.),0.45) + 2*bf1(n)*bf2(n))/1000.
-          ! Calculate fraction of RZFLW removed/added to catdef
-          RZFLW_CATDEF = (1-AR1(N))*SYSOIL*RZFLW/(1.0*AR1(N)+SYSOIL*(1-AR1(N)))
-          CATDEF(N)=CATDEF(N)-RZFLW_CATDEF
-          ! MB: remove all RZFLW from RZEXC because the other part 
-          ! flows into the surface water storage (microtopgraphy)
-          RZEXC(N)=RZEXC(N)-RZFLW
-
-        ENDIF
-
-!****   REMOVE ANY EXCESS FROM MOISTURE RESERVOIRS:
-
-        IF(CAPAC(N) .GT. SATCAP(N)) THEN
-          RZEXC(N)=RZEXC(N)+CAPAC(N)-SATCAP(N)
-          CAPAC(N)=SATCAP(N)
-          ENDIF
-
-        IF(RZEQ(N) + RZEXC(N) .GT. VGWMAX(N)) THEN
-          EXCESS=RZEQ(N)+RZEXC(N)-VGWMAX(N)
-          RZEXC(N)=VGWMAX(N)-RZEQ(N)
-          IF (POROS(N) .LE. 0.9) THEN
-             CATDEF(N)=CATDEF(N)-EXCESS
-          ELSE
             ! PEAT
-            ! MB: like for RZFLW --> EXCESS_CATDEF is the fraction in/out of catdef
-            EXCESS_CATDEF=(1-AR1(N))*SYSOIL*EXCESS/(1.0*AR1(N)+SYSOIL*(1-AR1(N)))
-            CATDEF(N)=CATDEF(N)-EXCESS_CATDEF
-            ! MB: CATDEF Threshold at zbar=0
-            ! water table not allowed to rise higher (numerically instable) 
-            ! zbar<0 only occurred due to extreme infiltration rates
-            ! (noticed this only snow melt events, very few locations and times)
-            ! (--> NOTE: PEATCLSM has no Hortonian runoff for zbar > 0)            
-            CATDEF_PEAT_THRESHOLD = ((BF2(N))**2.0-1.e-20)*BF1(N)
-            IF(CATDEF(N) .LT. CATDEF_PEAT_THRESHOLD) THEN
-              RUNSRF(N)=RUNSRF(N) + (CATDEF_PEAT_THRESHOLD - CATDEF(N))
-              ! runoff from AR1 for zbar>0
-              RZFLW_AR1 = RZFLW - RZFLW_CATDEF + (CATDEF_PEAT_THRESHOLD - CATDEF(N))
-              ! AR1=0.5 at zbar=0
-              ! SYsurface=0.5 at zbar=0
-              RUNSRF(N) = RUNSRF(N) + amax1(0.0, RZFLW_AR1 - 0.5*1000.*ZBAR1)
-              ! 
-              CATDEF(N)=CATDEF_PEAT_THRESHOLD             
-           ENDIF
-        ENDIF
-     ENDIF
- 
-     IF(CATDEF(N) .LT. 0.) THEN
-        RUNSRF(N)=RUNSRF(N)-CATDEF(N)
-        CATDEF(N)=0.
-     ENDIF
+            ! MB: accounting for water ponding on AR1
+            ! RZFLOW is partitioned into two flux components: (1) going in/out ponding water volume and (1) going in/out unsaturated soil storage
+            ! Specific yield of ponding water surface fraction is 1.0
+            ! calculate SYSOIL (see Dettmann and Bechtold, VZJ, 2016, for detailed theory)
+            ! SYSOIL in CLSM can be derived from first derivative of 
+            ! f_catdef(zbar) = ((zbar + bf2)^2 +1.0E-20)*bf1
+            ! division by 1000 to convert from m to mm gives (Note: catdef in PEATCLSM remains
+            ! the soil profile deficit, i.e. does not include the ponding water storage).
+            ! SYSOIL = (2*bf1*zbar + 2*bf1*bf2)/1000
+            ! Note: zbar defined here positive below ground.
+            ! For the SYSOIL estimation zbar must be constrained to 0.0 to 0.45 m,
+            ! to avoid extrapolation errors due to the non-optimal
+            ! (linear) approximation with the bf1-bf2-CLSM function,
+            ! theoretical SYSOIL curve levels off approximately at 0 m and 0.45 m.
+            ZBAR1=SQRT(1.e-20+CATDEF(N)/BF1(N))-BF2(N)
+            SYSOIL = (2*bf1(n)*amin1(amax1(zbar1,0.),0.45) + 2*bf1(n)*bf2(n))/1000.
+            ! Calculate fraction of RZFLW removed/added to catdef
+            RZFLW_CATDEF = (1-AR1(N))*SYSOIL*RZFLW/(1.0*AR1(N)+SYSOIL*(1-AR1(N)))
+            CATDEF(N)=CATDEF(N)-RZFLW_CATDEF
+            ! MB: remove all RZFLW from RZEXC because the other part 
+            ! flows into the surface water storage (microtopgraphy)
+            RZEXC(N)=RZEXC(N)-RZFLW
+            
+         ENDIF
 
-  100 ENDDO
+         !****   REMOVE ANY EXCESS FROM MOISTURE RESERVOIRS:
+         
+         IF(CAPAC(N) .GT. SATCAP(N)) THEN
+            RZEXC(N)=RZEXC(N)+CAPAC(N)-SATCAP(N)
+            CAPAC(N)=SATCAP(N)
+         ENDIF
+         
+         IF(RZEQ(N) + RZEXC(N) .GT. VGWMAX(N)) THEN
+            EXCESS=RZEQ(N)+RZEXC(N)-VGWMAX(N)
+            RZEXC(N)=VGWMAX(N)-RZEQ(N)
+            IF (POROS(N) .LE. 0.9) THEN
+               CATDEF(N)=CATDEF(N)-EXCESS
+            ELSE
+               ! PEAT
+               ! MB: like for RZFLW --> EXCESS_CATDEF is the fraction in/out of catdef
+               EXCESS_CATDEF=(1-AR1(N))*SYSOIL*EXCESS/(1.0*AR1(N)+SYSOIL*(1-AR1(N)))
+               CATDEF(N)=CATDEF(N)-EXCESS_CATDEF
+               ! MB: CATDEF Threshold at zbar=0
+               ! water table not allowed to rise higher (numerically instable) 
+               ! zbar<0 only occurred due to extreme infiltration rates
+               ! (noticed this only snow melt events, very few locations and times)
+               ! (--> NOTE: PEATCLSM has no Hortonian runoff for zbar > 0)            
+               CATDEF_PEAT_THRESHOLD = ((BF2(N))**2.0-1.e-20)*BF1(N)
+               IF(CATDEF(N) .LT. CATDEF_PEAT_THRESHOLD) THEN
+                  RUNSRF(N)=RUNSRF(N) + (CATDEF_PEAT_THRESHOLD - CATDEF(N))
+                  ! runoff from AR1 for zbar>0
+                  RZFLW_AR1 = RZFLW - RZFLW_CATDEF + (CATDEF_PEAT_THRESHOLD - CATDEF(N))
+                  ! AR1=0.5 at zbar=0
+                  ! SYsurface=0.5 at zbar=0
+                  RUNSRF(N) = RUNSRF(N) + amax1(0.0, RZFLW_AR1 - 0.5*1000.*ZBAR1)
+                  ! 
+                  CATDEF(N)=CATDEF_PEAT_THRESHOLD             
+               ENDIF
+            ENDIF
+         ENDIF
+ 
+         IF(CATDEF(N) .LT. 0.) THEN
+            RUNSRF(N)=RUNSRF(N)-CATDEF(N)
+            CATDEF(N)=0.
+         ENDIF
+         
+100   ENDDO
 
       RETURN
       END SUBROUTINE RZDRAIN
